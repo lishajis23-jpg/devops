@@ -1,0 +1,50 @@
+pipeline {
+    agent any
+    stages {
+        stage('Pre-check Docker') {
+            steps {
+                sh 'docker --version'
+                sh 'docker info > /dev/null 2>&1'
+                echo 'Docker is installed and the daemon is reachable'
+            }
+        }
+        stage('Setup Workspace') {
+            steps {
+                sh 'cp /src/delivery_metrics.py /src/Dockerfile /src/prometheus.yml /src/alert_rules.yml "$WORKSPACE"/'
+                sh 'ls -l "$WORKSPACE"'
+            }
+        }
+        stage('Clean Up Old Containers') {
+            steps {
+                sh 'docker rm -f delivery_metrics prometheus grafana || true'
+            }
+        }
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t delivery_metrics .'
+            }
+        }
+        stage('Run Application') {
+            steps {
+                sh 'docker run -d -p 8000:8000 --name delivery_metrics delivery_metrics'
+            }
+        }
+        stage('Run Prometheus & Grafana') {
+            steps {
+                sh '''
+                docker create --name prometheus -p 9090:9090 \
+                  --add-host=host.docker.internal:host-gateway prom/prometheus
+                docker cp prometheus.yml prometheus:/etc/prometheus/prometheus.yml
+                docker cp alert_rules.yml prometheus:/etc/prometheus/alert_rules.yml
+                docker start prometheus
+                docker run -d --name grafana -p 3000:3000 \
+                  --add-host=host.docker.internal:host-gateway \
+                  -e GF_AUTH_ANONYMOUS_ENABLED=true \
+                  -e GF_AUTH_ANONYMOUS_ORG_ROLE=Admin \
+                  -e GF_AUTH_DISABLE_LOGIN_FORM=true \
+                  grafana/grafana
+                '''
+            }
+        }
+    }
+}
