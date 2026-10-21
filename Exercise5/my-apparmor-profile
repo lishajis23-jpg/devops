@@ -1,0 +1,19 @@
+#include <tunables/global>
+
+profile my-apparmor-profile flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Allow the app to bind to a network port
+  network,
+
+  # Allow the app's own directory and the Python runtime
+  /app/** rwix,
+  /usr/local/** rix,
+
+  # Deny sensitive access
+  deny /etc/** r,
+  deny /var/** rw,
+  deny /bin/** x,
+  deny /usr/bin/** x,
+  deny capability sys_admin,
+}
